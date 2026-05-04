@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento Financeiro - Dashboard</title>
+    <!-- Fontes e Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee; --secondary: #3f37c9; --success: #4cc9f0;
+            --danger: #f72585; --warning: #f8961e; --bg: #f8f9fa; --card: #ffffff;
+            --text-dark: #2b2d42; --text-light: #8d99ae;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg); color: var(--text-dark); padding: 20px; }
+
+        .dashboard-container { max-width: 1200px; margin: auto; }
+        h1 { margin-bottom: 25px; font-weight: 700; color: var(--text-dark); }
+
+        /* Botão Principal */
+        .btn-transacao {
+            background: var(--primary); color: white; border: none; padding: 12px 24px;
+            border-radius: 8px; cursor: pointer; font-weight: 600; float: right; transition: 0.3s;
+        }
+        .btn-transacao:hover { background: var(--secondary); transform: translateY(-2px); }
+
+        /* Cards de Resumo */
+        .resumo-mensal { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px; clear: both; padding-top: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .card p { color: var(--text-light); font-size: 0.9rem; margin-bottom: 10px; }
+        .card .valor { font-size: 1.8rem; font-weight: 800; }
+        .valor-positivo { color: #2ecc71; }
+        .valor-negativo { color: var(--danger); }
+
+        /* Seção de Contas e Parcelas */
+        .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; }
+        .contas-grid { display: grid; gap: 15px; }
+        .conta-card { 
+            background: white; padding: 15px; border-radius: 10px; display: flex; 
+            justify-content: space-between; align-items: center; border-left: 5px solid var(--primary);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .conta-card.vencido { border-left-color: var(--danger); background: #fff5f7; }
+
+        /* Progresso das Parcelas */
+        .parcelamento-item { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .progresso { background: #eee; height: 8px; border-radius: 10px; margin: 10px 0; overflow: hidden; }
+        .barra { background: var(--primary); height: 100%; transition: 0.5s; }
+
+        /* Modais e Abas */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; z-index: 100; }
+        .modal-content { background: white; width: 90%; max-width: 500px; margin: 50px auto; padding: 30px; border-radius: 20px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-button { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; background: #eee; font-weight: 600; }
+        .tab-button.active { background: var(--primary); color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        input, select { width: 100%; padding: 12px; margin: 10px 0 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .btn-salvar { background: var(--primary); color: white; border: none; width: 100%; padding: 15px; border-radius: 10px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-container">
+        <button class="btn-transacao" onclick="abrirModal()"><i class="fas fa-plus"></i> Nova Transação / Parcela</button>
+        <h1>Dashboard Financeiro</h1>
+
+        <section class="resumo-mensal">
+            <div class="card card-saldo">
+                <p>Livre para Gastar</p>
+                <h2 class="valor" id="saldoGeral">R$ 0,00</h2>
+            </div>
+            <div class="card card-entrada">
+                <p>Receita Total</p>
+                <h2 class="valor valor-positivo" id="totalEntradas">+ R$ 0,00</h2>
+            </div>
+            <div class="card card-saida">
+                <p>Saídas Acumuladas</p>
+                <h2 class="valor valor-negativo" id="totalSaidas">- R$ 0,00</h2>
+            </div>
+        </section>
+
+        <div class="grid-layout">
+            <section class="contas-a-pagar">
+                <h3>🕒 Histórico e Lançamentos</h3><br>
+                <div class="contas-grid" id="containerLancamentos">
+                    <!-- Gerado via JS -->
+                </div>
+            </section>
+
+            <section class="detalhe-cartao">
+                <div class="card">
+                    <h3>💳 Cartão e Parcelas</h3><br>
+                    <div id="containerParcelas">
+                        <!-- Gerado via JS -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div id="modalAdicionar" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-bottom:20px">Adicionar Item</h2>
+            <div class="tabs">
+                <button class="tab-button active" onclick="mostrarAba('transacao')">Transação</button>
+                <button class="tab-button" onclick="mostrarAba('parcelamento')">Parcelamento</button>
+            </div>
+
+            <form id="formTransacao" class="tab-content active">
+                <label>Descrição:</label>
+                <input type="text" id="descTrans" placeholder="Ex: Salário, Aluguel" required>
+                <label>Valor (R$):</label>
+                <input type="number" step="0.01" id="valorTrans" required>
+                <label>Tipo:</label>
+                <select id="tipoTrans">
+                    <option value="entrada">Entrada (Receita)</option>
+                    <option value="saida">Saída (Gasto)</option>
+                </select>
+                <button type="submit" class="btn-salvar">Salvar no Sistema</button>
+                <button type="button" onclick="fecharModal()" style="background:none; border:none; width:100%; margin-top:10px; color:gray">Cancelar</button>
+            </form>
+
+            <form id="formParcelamento" class="tab-content">
+                <label>O que comprou?</label>
+                <input type="text" id="descParc" required>
+                <label>Total de Parcelas:</label>
+                <input type="number" id="numParc" required>
+                <label>Valor da Parcela (R$):</label>
+                <input type="number" step="0.01" id="valorUnidadeParc" required>
+                <button type="submit" class="btn-salvar">Cadastrar Cartão</button>
+                <button type="button" onclick="fecharModal()" style="background:none; border:none; width:100%; margin-top:10px; color:gray">Cancelar</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCCEV_IleuFuWEucIGZLKhWkZVZ9jf9IzQ",
+            authDomain: "financas-13104.firebaseapp.com",
+            projectId: "financas-13104",
+            storageBucket: "financas-13104.firebasestorage.app",
+            messagingSenderId: "84660695865",
+            appId: "1:84660695865:web:a1d1ce7873dea6b4a56ee8",
+            databaseURL: "https://financas-13104-default-rtdb.firebaseio.com"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const financasRef = ref(db, 'dados_financeiros');
+
+        let dados = { receita_total: 0, historico: [], parcelas: [] };
+
+        // --- LÓGICA DO FIREBASE ---
+        onValue(financasRef, (snapshot) => {
+            const val = snapshot.val();
+            if (val) {
+                dados = val;
+                if(!dados.historico) dados.historico = [];
+                if(!dados.parcelas) dados.parcelas = [];
+                atualizarUI();
+            }
+        });
+
+        function salvar() { set(financasRef, dados); }
+
+        // --- INTERFACE ---
+        window.abrirModal = () => document.getElementById('modalAdicionar').style.display = 'block';
+        window.fecharModal = () => document.getElementById('modalAdicionar').style.display = 'none';
+        window.mostrarAba = (aba) => {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById('form' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
+            event.currentTarget.classList.add('active');
+        };
+
+        // --- LANÇAMENTOS ---
+        document.getElementById('formTransacao').onsubmit = (e) => {
+            e.preventDefault();
+            const desc = document.getElementById('descTrans').value;
+            const valor = parseFloat(document.getElementById('valorTrans').value);
+            const tipo = document.getElementById('tipoTrans').value;
+
+            if(tipo === 'entrada') {
+                dados.receita_total = (dados.receita_total || 0) + valor;
+            } else {
+                dados.historico.push({ desc, valor, data: new Date().toLocaleDateString() });
+            }
+            salvar(); fecharModal(); e.target.reset();
+        };
+
+        document.getElementById('formParcelamento').onsubmit = (e) => {
+            e.preventDefault();
+            dados.parcelas.push({
+                desc: document.getElementById('descParc').value,
+                total: parseInt(document.getElementById('numParc').value),
+                paga: 0,
+                valor: parseFloat(document.getElementById('valorUnidadeParc').value)
+            });
+            salvar(); fecharModal(); e.target.reset();
+        };
+
+        window.pagarParcela = (idx) => {
+            const p = dados.parcelas[idx];
+            p.paga++;
+            dados.historico.push({ desc: `Parc: ${p.desc} (${p.paga}/${p.total})`, valor: p.valor, data: new Date().toLocaleDateString() });
+            if(p.paga >= p.total) dados.parcelas.splice(idx, 1);
+            salvar();
+        };
+
+        function atualizarUI() {
+            const totalSaidas = dados.historico.reduce((acc, h) => acc + h.valor, 0);
+            const saldo = (dados.receita_total || 0) - totalSaidas;
+
+            document.getElementById('saldoGeral').innerText = `R$ ${saldo.toFixed(2)}`;
+            document.getElementById('totalEntradas').innerText = `+ R$ ${(dados.receita_total || 0).toFixed(2)}`;
+            document.getElementById('totalSaidas').innerText = `- R$ ${totalSaidas.toFixed(2)}`;
+
+            document.getElementById('containerLancamentos').innerHTML = dados.historico.slice().reverse().map(h => `
+                <div class="conta-card">
+                    <div><strong>${h.desc}</strong><br><small>${h.data}</small></div>
+                    <div class="valor-negativo">- R$ ${h.valor.toFixed(2)}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('containerParcelas').innerHTML = dados.parcelas.map((p, i) => `
+                <div class="parcelamento-item">
+                    <div style="display:flex; justify-content:space-between">
+                        <strong>${p.desc}</strong>
+                        <span>R$ ${p.valor.toFixed(2)}</span>
+                    </div>
+                    <div class="progresso"><div class="barra" style="width:${(p.paga/p.total)*100}%"></div></div>
+                    <div style="display:flex; justify-content:space-between; align-items:center">
+                        <small>${p.paga}/${p.total} pagas</small>
+                        <button onclick="pagarParcela(${i})" class="btn-pagar" style="background:#eee; border:none; padding:4px 8px; border-radius:4px; cursor:pointer">Pagar Mês</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
